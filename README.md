@@ -70,23 +70,25 @@ bits simply fall back to their defaults when the files or services are absent.
 
 ## Install
 
-### Arch / BookOS (PKGBUILD)
+### BookOS (Fedora)
 
 ```sh
-makepkg -si
-```
-
-### Debian / Fedora packages
-
-```sh
+sudo dnf install webkit2gtk4.1-devel gtk3-devel libsoup3-devel glib2-devel \
+  xdg-utils rust cargo pkgconf-pkg-config
 cd src-tauri
-cargo tauri build        # produces .deb and .rpm in target/release/bundle/
+cargo tauri build        # produces .rpm and .deb in target/release/bundle/
+sudo dnf install target/release/bundle/rpm/*.rpm
 ```
+
+### Other distributions
+
+`cargo tauri build` also produces the `.deb`. On Arch there is a `PKGBUILD`
+(`makepkg -si`).
 
 ### Dependencies
 
-`webkit2gtk-4.1`, `gtk3`, `libsoup3`, `glib2`, `xdg-utils`.
-Build: `rust`, `cargo`, `pkgconf`.
+Runtime: `webkit2gtk4.1`, `gtk3`, `libsoup3`, `glib2`, `xdg-utils`.
+Build: `rust`, `cargo`, `pkgconf-pkg-config` and the `-devel` packages above.
 
 ## Build and run
 
@@ -119,7 +121,7 @@ src-tauri/src/
   pagina.js          injected into WhatsApp: context menu, image paste
   whatsapp.css       user stylesheet over WhatsApp
   captura.rs         debug-only screenshots
-PKGBUILD             Arch package
+PKGBUILD             Arch package (secondary; BookOS ships the .rpm)
 ```
 
 ## License
