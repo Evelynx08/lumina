@@ -1,0 +1,196 @@
+/* Hoja de usuario sobre WhatsApp Web. Se carga después de tokens.css y de la
+   paleta de Ajustes, así que todas las variables de BookOS están definidas.
+
+   Solo se usan ganchos que WhatsApp mantiene entre versiones: sus
+   `data-testid` y `data-icon`, los roles ARIA estándar (`menu`, `dialog`…) y
+   los tokens `--WDS-*` de su sistema de diseño. Las clases cortas
+   (`.x1g5lz36`…) son hashes de su compilador y cambian sin aviso; no se tocan.
+   Los `data-testid` y `--WDS-*` salen de la extensión «Persona 5» que el
+   usuario tenía funcionando, no de suposiciones. Lo que aquí no se pinta
+   mantiene el claro/oscuro del propio WhatsApp, que sigue al sistema. */
+
+/* ── Tipografía del sistema (HIG §2.2) ─────────────────────────────────── */
+/* Los iconos de WhatsApp son SVG y los emoji, imágenes: cambiar la fuente
+   de todo lo demás no rompe ningún glifo. */
+body, body :not(svg, svg *) {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Roboto, sans-serif !important;
+}
+
+/* ── Meta AI fuera ─────────────────────────────────────────────────────── */
+/* Por nombre exacto: un `*=` también casaría con el buscador («Pregunta a
+   Meta AI o busca») y lo escondería. Y por su icono, para el botón flotante
+   de la lista de chats, que no lleva etiqueta propia.
+
+   En la barra lateral la etiqueta está en un elemento interior y su padre es
+   el círculo del botón: escondiendo solo la etiqueta quedaba el círculo vacío
+   con su tooltip (captura del usuario). Se esconde también el padre, pero
+   nunca uno con `data-testid` ni un `header`: si la etiqueta colgara
+   directamente de la sección de navegación, se llevaría todos los iconos. */
+[aria-label="Meta AI" i],
+:not([data-testid], header):has(> [aria-label="Meta AI" i]),
+[data-navbar-item="true"]:has([aria-label="Meta AI" i]),
+button:has([data-icon*="meta-ai" i]),
+[role="button"]:has(> [data-icon*="meta-ai" i]) {
+  display: none !important;
+}
+
+/* ── Colores ───────────────────────────────────────────────────────────── */
+:root {
+  /* Recibido = tarjeta, enviado = contenedor de acento. Ajustes da
+     `--accent-container`; sin paleta se mezcla el acento sobre la tarjeta. */
+  --WDS-systems-bubble-surface-incoming: var(--card) !important;
+  --WDS-systems-bubble-surface-outgoing: var(--accent-container, color-mix(in srgb, var(--blue) 18%, var(--card))) !important;
+}
+
+/* Lienzo: barra de navegación izquierda, portada y fondo del chat. */
+header:has([data-testid="navbar-primary-section"]),
+[data-testid="intro-panel"],
+[data-testid="conversation-panel-messages"] {
+  background-color: var(--bg) !important;
+}
+
+/* La columna de chats es lienzo: las tarjetas son las filas (abajo). */
+#pane-side,
+[data-testid="chat-list"],
+div:has(> header[data-testid="chatlist-header"]) {
+  background-color: var(--bg) !important;
+}
+
+/* Superficies: cabecera de la conversación y caja de texto. Con fondo de
+   chat, `fondo.rs` pinta la caja de texto con la misma imagen. */
+[data-testid="conversation-header"],
+[data-testid="compose-box"] {
+  background-color: var(--card) !important;
+}
+
+/* Sin leer: es un estado que se pulsa para abrir el chat, así que va en el
+   acento (HIG §1), no en el verde de WhatsApp. */
+[data-testid="icon-unread-count"] {
+  background-color: var(--blue) !important;
+  color: var(--on-accent, #fff) !important;
+}
+
+::selection { background: color-mix(in srgb, var(--blue) 25%, transparent); }
+
+/* ── Filas de la lista: tarjetas agrupadas ─────────────────────────────── */
+/* WhatsApp coloca cada fila en posición absoluta con su alto fijo, así que un
+   margen la descolocaría. `clip-path` recorta sin tocar la maqueta: el hueco
+   entre tarjetas son los 3 px de arriba y abajo que se quedan fuera. Fuera,
+   22 px (tarjeta de sidebar, HIG §2.3); dentro, 8 px, para que se lean como
+   un grupo, como en la referencia del usuario. `list-item-0` es la primera fila; `:last-child` es lo mejor que
+   hay para la última, y en una lista virtualizada puede fallar al hacer
+   scroll. */
+[data-testid^="list-item-"] {
+  background-color: var(--card) !important;
+  clip-path: inset(3px 8px round 8px) !important;
+  transition: background-color 120ms cubic-bezier(.4,0,.2,1) !important;
+}
+[data-testid="list-item-0"] {
+  clip-path: inset(3px 8px round 22px 22px 8px 8px) !important;
+}
+[data-testid^="list-item-"]:last-child {
+  clip-path: inset(3px 8px round 8px 8px 22px 22px) !important;
+}
+[data-testid="list-item-0"]:last-child {
+  clip-path: inset(3px 8px round 22px) !important;
+}
+
+/* Las capas de WhatsApp dentro de la fila traen su propio gris y tapaban la
+   tarjeta (visto en la captura: tarjetas grises con una franja de nuestro
+   color debajo). Transparentes, la tarjeta es la fila entera, y el hover y la
+   selección van en la fila para que sigan su forma. */
+[data-testid^="list-item-"] [role="gridcell"],
+[data-testid^="list-item-"] [role="gridcell"] > div,
+[data-testid^="list-item-"] [data-testid="cell-frame-container"] {
+  background-color: transparent !important;
+}
+/* El recorte se come 8 px por lado; sin devolverlos, la foto quedaba a 6 px
+   del borde de la tarjeta. */
+[data-testid^="list-item-"] [data-testid="cell-frame-container"] {
+  margin-inline: 8px !important;
+}
+[data-testid^="list-item-"]:hover {
+  background-color: color-mix(in srgb, var(--tx) 6%, var(--card)) !important;
+}
+[data-testid^="list-item-"]:has([aria-selected="true"]) {
+  background-color: color-mix(in srgb, var(--blue) 14%, var(--card)) !important;
+}
+
+/* ── Filtros (Todos, No leídos…): chips de BookOS ──────────────────────── */
+/* Selectores de la extensión Persona 5. El activo va en el acento, como una
+   opción seleccionada (HIG §2.1), no en el verde de WhatsApp. */
+div[aria-label="chat-list-filters"] div[data-testid="filter-button"] button {
+  background-color: var(--sbg) !important;
+  border-color: transparent !important;
+  color: var(--tx) !important;
+  transition: background-color 120ms cubic-bezier(.4,0,.2,1) !important;
+}
+div[aria-label="chat-list-filters"] div[data-testid="filter-button"] button[aria-selected="true"] {
+  background-color: color-mix(in srgb, var(--blue) 18%, transparent) !important;
+  color: var(--blue) !important;
+}
+/* Dentro del chip solo el color: con el fondo también en el texto quedaba un
+   rectángulo que parecía texto seleccionado (captura del usuario). */
+div[aria-label="chat-list-filters"] div[data-testid="filter-button"] button[aria-selected="true"] * {
+  background-color: transparent !important;
+  color: var(--blue) !important;
+}
+
+/* Contador de la barra lateral izquierda (también de la extensión). */
+span[role="status"] {
+  background-color: var(--blue) !important;
+  color: var(--on-accent, #fff) !important;
+}
+
+/* «Obtener WhatsApp para Mac» al pie de la lista: WhatsApp ve el motor WebKit
+   y lo toma por Safari. Por su enlace de descarga; si es un botón sin enlace,
+   esto no lo alcanza. */
+a[href*="whatsapp.com/download" i] {
+  display: none !important;
+}
+
+/* ── Menús desplegables: popover de BookOS (HIG §4) ────────────────────── */
+[role="menu"] {
+  background: color-mix(in srgb, var(--card) 94%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--tx) 9%, transparent) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 6px 22px rgba(0,0,0,.18) !important;
+  padding: 6px !important;
+  animation: lumina-popover 180ms cubic-bezier(.32,1.3,.5,1);
+}
+[role="menu"] [role="menuitem"],
+[role="menu"] li[role="button"] {
+  border-radius: 13px !important;
+  transition: background-color 120ms cubic-bezier(.4,0,.2,1) !important;
+}
+[role="menu"] [role="menuitem"]:hover,
+[role="menu"] li[role="button"]:hover {
+  background-color: var(--hov) !important;
+}
+
+/* ── Diálogos: los de confirmación de BookOS ───────────────────────────── */
+[role="dialog"] {
+  border-radius: 26px !important;
+  box-shadow: 0 20px 56px rgba(0,0,0,.30) !important;
+  animation: lumina-modal 250ms cubic-bezier(.34,1.4,.64,1);
+}
+
+/* ── Al abrir un chat, entra con el fundido de tarjeta ─────────────────── */
+[data-testid="conversation-panel-messages"] {
+  animation: lumina-entrada 220ms cubic-bezier(.25,.46,.45,.94);
+}
+
+/* ── Barras de desplazamiento finas, como en el resto del sistema ──────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--toff); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--tx2); }
+
+/* Solo `transform` y `opacity` (HIG §2.7). */
+@keyframes lumina-popover { from { opacity: 0; transform: scale(.94); } }
+@keyframes lumina-modal { from { opacity: 0; transform: scale(.92); } }
+@keyframes lumina-entrada { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  [role="menu"], [role="dialog"], [data-testid="conversation-panel-messages"] { animation: none !important; }
+}

@@ -1,0 +1,38 @@
+[package]
+name = "bookos-lumina"
+version = "0.1.0"
+description = "Cliente de WhatsApp para BookOS"
+authors = ["BookOS"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# `unstable` da `Window::add_child`: la barra y WhatsApp son dos webviews de
+# la misma ventana para que la página remota no tenga ni un comando de IPC.
+tauri = { version = "2", features = ["unstable"] }
+tauri-plugin-single-instance = "2"
+serde_json = "1"
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+tokio = { version = "1", features = ["sync"] }
+futures-util = "0.3"
+dirs = "5"
+
+# Las mismas versiones y features que ya arrastra tauri: no añaden nada al
+# árbol, solo hacen visibles las señales nativas de WebKitGTK (notificaciones,
+# permisos, menú contextual, hojas de usuario).
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = { version = "0.18", features = ["v3_24"] }
+webkit2gtk = { version = "2", features = ["v2_40"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = "z"
+panic = "abort"

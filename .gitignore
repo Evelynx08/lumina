@@ -1,0 +1,18 @@
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Artefactos de makepkg
+pkg/
+*.pkg.tar.*
+*.tar.gz
+
+# Capturas de depuración (LUMINA_CAPTURA)
+*.barra.png
+*.whatsapp.png
+
+# Editores y sistema
+.vscode/
+.idea/
+*.swp
+.DS_Store
