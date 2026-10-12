@@ -1,5 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autenticar;
+mod barra;
+mod bloqueo;
 #[cfg(debug_assertions)]
 mod captura;
 mod fondo;
@@ -9,13 +12,13 @@ mod webkit;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::mpsc::{sync_channel, SyncSender, TrySendError};
+use std::sync::{Mutex, OnceLock};
 
 use tauri::webview::{DownloadEvent, NewWindowResponse, WebviewBuilder};
 use tauri::window::WindowBuilder;
 use tauri::{
-    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Theme, WebviewUrl, Window,
-    WindowEvent,
+    AppHandle, LogicalPosition, LogicalSize, Manager, Theme, WebviewUrl, Window, WindowEvent,
 };
 
 const WHATSAPP: &str = "https://web.whatsapp.com/";
@@ -26,16 +29,14 @@ const TOKENS: &str = include_str!("../../src/tokens.css");
 const ESTILO_WHATSAPP: &str = include_str!("whatsapp.css");
 const PAGINA: &str = include_str!("pagina.js");
 
-/// Lo que eligió el usuario en el interruptor de la barra. La barra lo guarda
-/// en su `localStorage` y lo repite al arrancar; aquí solo hace falta mientras
-/// la app vive.
+/// Preferencias restauradas desde el fichero local o la migración de la barra web.
 static PALETA_ACTIVA: AtomicBool = AtomicBool::new(true);
 /// Último estado visto: arrastrar un borde manda decenas de `Resized`, y
 /// rehacer las hojas en cada uno recalcula el estilo de todo WhatsApp.
 static MAXIMIZADA: AtomicBool = AtomicBool::new(false);
-/// El fondo de los chats. Como la paleta, la barra guarda la elección y la
-/// repite al arrancar.
+/// El fondo actual y la última imagen elegida, aunque ahora se use otro modo.
 static FONDO: Mutex<fondo::Fondo> = Mutex::new(fondo::Fondo::Escritorio);
+static IMAGEN_GUARDADA: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 pub fn mostrar_ventana(app: &AppHandle) {
     if let Some(ventana) = app.get_window("main") {
@@ -96,6 +97,28 @@ fn aplicar_tema(ventana: &Window) {
 /// Recompone las hojas de usuario de WhatsApp: los tokens de reserva, encima
 /// la paleta de Ajustes si está activa, y las reglas que los usan.
 fn aplicar_estilos(app: &AppHandle) {
+    static PETICIONES: OnceLock<SyncSender<AppHandle>> = OnceLock::new();
+    let peticiones = PETICIONES.get_or_init(|| {
+        let (emisor, receptor) = sync_channel::<AppHandle>(1);
+        // Un solo trabajador y una petición pendiente: las ráfagas de foco
+        // no acumulan hilos ni varias imágenes decodificadas. Cada turno lee
+        // el estado actual, por lo que agrupar peticiones no pierde cambios.
+        std::thread::spawn(move || {
+            while let Ok(app) = receptor.recv() {
+                actualizar_estilos(&app);
+            }
+        });
+        emisor
+    });
+    match peticiones.try_send(app.clone()) {
+        Ok(()) | Err(TrySendError::Full(_)) => {}
+        Err(TrySendError::Disconnected(_)) => {
+            eprintln!("lumina: el trabajador de estilos se ha detenido");
+        }
+    }
+}
+
+fn actualizar_estilos(app: &AppHandle) {
     let Some(whatsapp) = app.get_webview("whatsapp") else {
         return;
     };
@@ -107,20 +130,20 @@ fn aplicar_estilos(app: &AppHandle) {
     let fondo = FONDO.lock().unwrap_or_else(|e| e.into_inner()).clone();
     // Fuera del hilo de GTK: la primera vez hay que abrir y reducir la imagen
     // del fondo, y eso no puede congelar la ventana.
-    std::thread::spawn(move || {
-        let mut css = String::from(TOKENS);
-        if PALETA_ACTIVA.load(Ordering::Relaxed) {
-            css.push_str(&paleta_css());
-        }
-        css.push_str(ESTILO_WHATSAPP);
-        css.push_str(&fondo::css(&fondo, oscuro));
-        // La ventana es transparente y la barra redondea las esquinas de arriba;
-        // las de abajo las tiene que recortar la página. Maximizada no hay esquinas.
-        if !maximizada {
-            css.push_str("html{clip-path:inset(0 round 0 0 20px 20px)!important}");
-        }
-        let _ = whatsapp.with_webview(move |w| webkit::estilos(&w.inner(), &css));
-    });
+    let mut css = String::from(TOKENS);
+    if PALETA_ACTIVA.load(Ordering::Relaxed) {
+        css.push_str(&paleta_css());
+    }
+    css.push_str(ESTILO_WHATSAPP);
+    css.push_str(&fondo::css(&fondo, oscuro));
+    // La ventana es transparente y la barra redondea las esquinas de arriba;
+    // las de abajo las tiene que recortar la página. Maximizada no hay esquinas.
+    if !maximizada {
+        css.push_str("html{clip-path:inset(0 round 0 0 20px 20px)!important}");
+    }
+    if let Err(e) = whatsapp.with_webview(move |w| webkit::estilos(&w.inner(), css)) {
+        eprintln!("lumina: no se pudieron actualizar los estilos: {e}");
+    }
 }
 
 /// Ruta libre en Descargas: «foto.jpg», «foto (1).jpg», «foto (2).jpg»…
@@ -140,18 +163,15 @@ fn destino_libre(carpeta: &Path, nombre: &OsStr) -> PathBuf {
         .expect("la serie de nombres no se acaba")
 }
 
-#[tauri::command]
-fn bookos_palette_css() -> String {
-    paleta_css()
-}
-
 /// `modo`: «ninguno», «escritorio» o «imagen» (con `ruta`).
-#[tauri::command]
 fn fondo_chats(app: AppHandle, modo: &str, ruta: Option<PathBuf>) -> Result<(), String> {
     let nuevo = match (modo, ruta) {
         ("ninguno", _) => fondo::Fondo::Ninguno,
         ("escritorio", _) => fondo::Fondo::Escritorio,
-        ("imagen", Some(ruta)) => fondo::Fondo::Imagen(ruta),
+        ("imagen", Some(ruta)) => {
+            *IMAGEN_GUARDADA.lock().unwrap_or_else(|e| e.into_inner()) = Some(ruta.clone());
+            fondo::Fondo::Imagen(ruta)
+        }
         _ => return Err(format!("fondo desconocido: {modo}")),
     };
     *FONDO.lock().unwrap_or_else(|e| e.into_inner()) = nuevo;
@@ -159,35 +179,16 @@ fn fondo_chats(app: AppHandle, modo: &str, ruta: Option<PathBuf>) -> Result<(), 
     Ok(())
 }
 
-#[tauri::command]
-async fn elegir_fondo() -> Result<Option<PathBuf>, String> {
-    fondo::elegir().await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 fn paleta_whatsapp(app: AppHandle, activa: bool) {
     PALETA_ACTIVA.store(activa, Ordering::Relaxed);
     aplicar_estilos(&app);
 }
 
-#[tauri::command]
-fn desplegar_barra(webview: tauri::Webview, abierta: bool) -> Result<(), String> {
-    webview
-        .with_webview(move |w| webkit::desplegar(&w.inner(), abierta, ALTO_BARRA as i32))
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 fn recargar_whatsapp(app: AppHandle) -> Result<(), String> {
     let whatsapp = app
         .get_webview("whatsapp")
         .ok_or("no hay webview de WhatsApp")?;
     whatsapp.reload().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn salir(app: AppHandle) {
-    app.exit(0);
 }
 
 /// Quita el zoom de página que WebKitGTK hace con el pellizco del touchpad.
@@ -228,16 +229,9 @@ fn main() {
             mostrar_ventana(app)
         }))
         .on_page_load(desactivar_zoom_por_pellizco)
-        .invoke_handler(tauri::generate_handler![
-            fondo_chats,
-            elegir_fondo,
-            bookos_palette_css,
-            paleta_whatsapp,
-            desplegar_barra,
-            recargar_whatsapp,
-            salir
-        ])
+        .invoke_handler(tauri::generate_handler![barra::migrar_preferencias])
         .setup(|app| {
+            let preferencias_migradas = barra::cargar(app.handle())?;
             let ventana = WindowBuilder::new(app, "main")
                 .title("Lumina")
                 .inner_size(1100.0, 760.0)
@@ -294,19 +288,23 @@ fn main() {
                 LogicalPosition::new(0.0, ALTO_BARRA),
                 LogicalSize::new(tam.width, tam.height - ALTO_BARRA),
             )?;
-            // Posición y tamaño solo valen para el primer reparto: quien manda
-            // después es el `GtkOverlay` de `webkit::superponer`.
-            let barra = ventana.add_child(
-                WebviewBuilder::new("barra", WebviewUrl::App("index.html".into()))
-                    .transparent(true),
-                LogicalPosition::new(0.0, 0.0),
-                LogicalSize::new(tam.width, ALTO_BARRA),
-            )?;
-            barra.with_webview(|w| webkit::superponer(&w.inner(), ALTO_BARRA as i32))?;
+            barra::crear(&ventana)?;
+            bloqueo::crear(&ventana)?;
+            if !preferencias_migradas {
+                let lector = ventana.add_child(
+                    WebviewBuilder::new("barra", WebviewUrl::App("migrar.html".into())),
+                    LogicalPosition::new(0.0, 0.0),
+                    LogicalSize::new(1.0, 1.0),
+                )?;
+                lector.hide()?;
+            }
 
             let app_handle = app.handle().clone();
             let wa = whatsapp.clone();
-            whatsapp.with_webview(move |w| webkit::integrar(app_handle, wa, &w.inner()))?;
+            whatsapp.with_webview(move |w| {
+                webkit::reducir_cache(&w.inner());
+                webkit::integrar(app_handle, wa, &w.inner());
+            })?;
             aplicar_estilos(app.handle());
             notificaciones::escuchar(app.handle().clone());
 
@@ -318,11 +316,14 @@ fn main() {
                     api.prevent_close();
                     let _ = ventana_eventos.hide();
                 }
+                // El plazo del bloqueo cuenta desde que se deja la ventana.
+                WindowEvent::Focused(false) => bloqueo::al_desenfocar(ventana_eventos.app_handle()),
                 // Maximizar quita las esquinas redondeadas de abajo.
                 WindowEvent::Resized(_) => {
                     let ahora = ventana_eventos.is_maximized().unwrap_or(false);
                     if MAXIMIZADA.swap(ahora, Ordering::Relaxed) != ahora {
                         aplicar_estilos(ventana_eventos.app_handle());
+                        barra::actualizar(ventana_eventos.app_handle());
                     }
                 }
                 // Ajustes puede haber cambiado el fondo, la paleta o el tema
@@ -331,7 +332,8 @@ fn main() {
                 WindowEvent::Focused(true) => {
                     aplicar_tema(&ventana_eventos);
                     aplicar_estilos(ventana_eventos.app_handle());
-                    let _ = ventana_eventos.emit_to("barra", "lumina://foco", ());
+                    barra::actualizar(ventana_eventos.app_handle());
+                    bloqueo::al_enfocar(ventana_eventos.app_handle());
                 }
                 _ => {}
             });

@@ -18,6 +18,12 @@ zbus = { version = "5", default-features = false, features = ["tokio"] }
 tokio = { version = "1", features = ["sync"] }
 futures-util = "0.3"
 dirs = "5"
+# PAM se carga en tiempo de ejecución (`autenticar.rs`); los dos ya estaban
+# en el árbol de Tauri, aquí solo se hacen visibles.
+libc = "0.2"
+libloading = "0.7"
+# Hash del PIN propio del bloqueo: lento a propósito y con sal.
+argon2 = "0.5"
 
 # Las mismas versiones y features que ya arrastra tauri: no añaden nada al
 # árbol, solo hacen visibles las señales nativas de WebKitGTK (notificaciones,

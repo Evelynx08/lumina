@@ -109,6 +109,32 @@ LUMINA_CAPTURA=/tmp/ventana.png LUMINA_CAPTURA_ESPERA=15 cargo run
 
 See the header of `src-tauri/src/captura.rs` for the rest of the variables.
 
+## Memoria
+
+Lumina usa una caché moderada de recursos de WebKit y no retiene páginas para
+volver atrás. El proceso de red revisa su memoria cada 10 segundos y comienza
+a recuperarla a partir de 128 MiB, con una política más estricta a partir de
+192 MiB. Estos umbrales son solo del proceso de red, no un límite de toda la
+aplicación. No se cierran procesos ni se recarga WhatsApp para liberar RAM.
+
+Las actualizaciones de estilos se agrupan en un único trabajador, con una sola
+petición pendiente, y la hoja de usuario solo se sustituye si cambia su contenido.
+Esto evita acumular hilos y volver a procesar el fondo al recuperar el foco.
+
+Para comprobar el objetivo de 1,2 GB hay que medir el binario `release` junto
+con todos sus procesos hijos durante el uso habitual. La suma de PSS reparte
+la memoria compartida; la suma de RSS la cuenta en cada proceso que la utiliza.
+Los ajustes no garantizan un máximo absoluto: el historial y los archivos
+multimedia que mantenga vivos WhatsApp también influyen en el consumo.
+
+Comprobación del 6 de octubre de 2026, WebKitGTK 2.54.0, `release`, sesión
+iniciada y lista de chats en reposo durante 90 segundos, muestreada cada segundo:
+805 MB de PSS y 1311 MB de RSS sumado al terminar; picos de 869 MB y 1384 MB,
+respectivamente (MB decimales). No se observó una reducción concluyente en
+reposo frente al binario anterior. No se han validado sesiones largas, llamadas
+ni archivos multimedia grandes; el objetivo estricto de 1,2 GB de RSS sigue
+pendiente.
+
 ## Project layout
 
 ```

@@ -1,19 +1,20 @@
-//! Captura de cada webview a PNG, solo en depuración.
+//! Capturas de la barra nativa y de WhatsApp, solo en depuración.
 //!
 //! Existe para mirar lo que se pinta sin depender de una herramienta de
 //! captura del escritorio (Spectacle no funciona en la sesión BookOS). Uso:
 //!
 //!     LUMINA_CAPTURA=/ruta/ventana.png LUMINA_CAPTURA_ESPERA=15 \
-//!     LUMINA_CAPTURA_JS="document.getElementById('mas').click()" \
+//!     LUMINA_CAPTURA_MENU=1 \
 //!     cargo run
 //!
-//! Deja `ventana.barra.png` y `ventana.whatsapp.png`. `LUMINA_CAPTURA_JS` se
-//! ejecuta en la barra y `LUMINA_CAPTURA_JS_WHATSAPP` en WhatsApp, un segundo
-//! antes de capturar, para fotografiar estados como el menú abierto o provocar
-//! un aviso. `LUMINA_CAPTURA_CLIC=x,y` pulsa después en ese punto de WhatsApp
+//! Deja `ventana.barra.png`, `ventana.menu.png` si está abierto, y
+//! `ventana.whatsapp.png`. `LUMINA_CAPTURA_JS_WHATSAPP` se ejecuta un segundo
+//! antes de fotografiar WhatsApp. `LUMINA_CAPTURA_CLIC=x,y` pulsa después en ese punto de WhatsApp
 //! con un clic de GDK, que WebKit cuenta como gesto del usuario: un `eval` no
 //! lo es, y sin gesto el portapapeles ni siquiera llega a pedir permiso.
 //! `LUMINA_CAPTURA_PAUSA=s` espera esos segundos más antes de fotografiar.
+//! `LUMINA_CAPTURA_BLOQUEO=pin|sistema|nuevo` enseña esa pantalla de bloqueo
+//! (sin guardar nada) y deja `ventana.bloqueo.png`.
 //! `LUMINA_CAPTURA_FOCO=1` le da antes el foco a la ventana: el compositor solo
 //! deja tocar el portapapeles al cliente con el foco del teclado, y una ventana
 //! lanzada desde un terminal lo pierde al segundo (medido con `WAYLAND_DEBUG`).
@@ -30,7 +31,7 @@ pub fn programar(ventana: &Window) {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(12);
-    let guion = std::env::var("LUMINA_CAPTURA_JS").ok();
+    let abrir_menu = std::env::var_os("LUMINA_CAPTURA_MENU").is_some();
     let guion_whatsapp = std::env::var("LUMINA_CAPTURA_JS_WHATSAPP").ok();
     let ventana = ventana.clone();
     std::thread::spawn(move || {
@@ -41,12 +42,32 @@ pub fn programar(ventana: &Window) {
             let _ = ventana.set_focus();
             std::thread::sleep(Duration::from_secs(1));
         }
-        for (guion, etiqueta) in [(guion, "barra"), (guion_whatsapp, "whatsapp")] {
-            if let (Some(js), Some(vista)) = (guion, ventana.app_handle().get_webview(etiqueta)) {
-                let _ = vista.eval(js);
-                std::thread::sleep(Duration::from_secs(1));
-            }
+        if let (Some(js), Some(vista)) =
+            (guion_whatsapp, ventana.app_handle().get_webview("whatsapp"))
+        {
+            let _ = vista.eval(js);
+            std::thread::sleep(Duration::from_secs(1));
         }
+        if let Ok(como) = std::env::var("LUMINA_CAPTURA_BLOQUEO") {
+            let app = ventana.app_handle().clone();
+            let _ = ventana
+                .app_handle()
+                .run_on_main_thread(move || crate::bloqueo::probar(&app, &como));
+            std::thread::sleep(Duration::from_secs(1));
+        }
+        if abrir_menu {
+            let _ = ventana
+                .app_handle()
+                .run_on_main_thread(crate::barra::abrir_menu);
+            std::thread::sleep(Duration::from_secs(1));
+        }
+        let ruta_nativa = std::path::PathBuf::from(&ruta);
+        let _ = ventana
+            .app_handle()
+            .run_on_main_thread(move || {
+                crate::barra::capturar(&ruta_nativa);
+                crate::bloqueo::capturar(&ruta_nativa);
+            });
         if let (Some((x, y)), Some(vista)) = (
             std::env::var("LUMINA_CAPTURA_CLIC").ok().and_then(|c| {
                 let (x, y) = c.split_once(',')?;
@@ -65,7 +86,7 @@ pub fn programar(ventana: &Window) {
         }
         // GDK no ve lo que WebKit pinta por GL (sale una ventana en blanco),
         // así que cada webview se fotografía con su propia instantánea.
-        for etiqueta in ["barra", "whatsapp"] {
+        for etiqueta in ["whatsapp"] {
             let Some(vista) = ventana.app_handle().get_webview(etiqueta) else {
                 continue;
             };

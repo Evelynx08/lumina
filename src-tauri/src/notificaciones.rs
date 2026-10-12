@@ -83,8 +83,17 @@ async fn notify(
 
 /// Publica un mensaje de WhatsApp. Hilo de GTK.
 pub fn mostrar_mensaje(app: &AppHandle, aviso: &webkit2gtk::Notification) {
-    let resumen = aviso.title().map(|t| t.to_string()).unwrap_or_default();
-    let cuerpo = aviso.body().map(|t| t.to_string()).unwrap_or_default();
+    // Con la app bloqueada el aviso no dice de quién ni qué, y no se puede
+    // responder: si no, el bloqueo se saltaría desde el propio aviso.
+    let privado = crate::bloqueo::bloqueada();
+    let (resumen, cuerpo) = if privado {
+        ("Lumina".to_string(), "Mensaje nuevo".to_string())
+    } else {
+        (
+            aviso.title().map(|t| t.to_string()).unwrap_or_default(),
+            aviso.body().map(|t| t.to_string()).unwrap_or_default(),
+        )
+    };
     // WhatsApp etiqueta los avisos por chat. Reutilizar el id hace que el
     // segundo mensaje de un chat sustituya al primero en vez de apilar otro.
     let etiqueta = aviso.tag();
@@ -132,7 +141,7 @@ pub fn mostrar_mensaje(app: &AppHandle, aviso: &webkit2gtk::Notification) {
 
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        match notify(&resumen, &cuerpo, sustituye, "im.received", true).await {
+        match notify(&resumen, &cuerpo, sustituye, "im.received", !privado).await {
             Ok(id) => {
                 let _ = app.run_on_main_thread(move || {
                     ESTADO.with_borrow_mut(|e| {
@@ -235,6 +244,10 @@ pub fn escuchar(app: AppHandle) {
             let app2 = app.clone();
             let _ = app.run_on_main_thread(move || match senal {
                 Senal::Respuesta(id, texto) => {
+                    // Un aviso de antes de bloquear aún tiene «Responder».
+                    if crate::bloqueo::bloqueada() {
+                        return eprintln!("lumina: respuesta descartada, la app está bloqueada");
+                    }
                     // Se queda en el mapa: el cierre que llega detrás es el que
                     // lo quita.
                     ESTADO.with_borrow(|e| {

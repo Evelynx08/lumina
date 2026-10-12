@@ -49,6 +49,17 @@ header:has([data-testid="navbar-primary-section"]),
   background-color: var(--bg) !important;
 }
 
+/* La cabecera de la lista (título, buscador, filtros) también es lienzo.
+   WhatsApp la pinta con su gris en varias capas sin nombre estable, todas a
+   través de estas variables: se redefinen solo dentro de `#side` y de la
+   cabecera del título, que cuelga fuera de él; como se heredan, diálogos y
+   otros paneles no cambian. El buscador, del tono de los chips de filtro. */
+#side,
+header[data-testid="chatlist-header"] {
+  --WDS-surface-default: var(--bg) !important;
+  --WDS-surface-highlight: var(--sbg) !important;
+}
+
 /* La columna de chats es lienzo: las tarjetas son las filas (abajo). */
 #pane-side,
 [data-testid="chat-list"],
@@ -61,6 +72,14 @@ div:has(> header[data-testid="chatlist-header"]) {
 [data-testid="conversation-header"],
 [data-testid="compose-box"] {
   background-color: var(--card) !important;
+}
+
+/* Dentro de la conversación, el gris de WhatsApp es el del banner de
+   mensajes fijados (y otras barras sin `data-testid`). Se redefine la
+   variable en `#main`, como en `#side`: las burbujas van con sus propias
+   variables y los diálogos cuelgan fuera, así que no cambian. */
+#main {
+  --WDS-surface-default: var(--card) !important;
 }
 
 /* Sin leer: es un estado que se pulsa para abrir el chat, así que va en el
@@ -98,10 +117,13 @@ div:has(> header[data-testid="chatlist-header"]) {
 /* Las capas de WhatsApp dentro de la fila traen su propio gris y tapaban la
    tarjeta (visto en la captura: tarjetas grises con una franja de nuestro
    color debajo). Transparentes, la tarjeta es la fila entera, y el hover y la
-   selección van en la fila para que sigan su forma. */
+   selección van en la fila para que sigan su forma. La fila del chat con
+   uno mismo cambia `cell-frame-container` por `message-yourself-row`, con su
+   gris propio, y dejaba la tarjeta como un marco alrededor. */
 [data-testid^="list-item-"] [role="gridcell"],
 [data-testid^="list-item-"] [role="gridcell"] > div,
-[data-testid^="list-item-"] [data-testid="cell-frame-container"] {
+[data-testid^="list-item-"] [data-testid="cell-frame-container"],
+[data-testid^="list-item-"] [data-testid="message-yourself-row"] {
   background-color: transparent !important;
 }
 /* El recorte se come 8 px por lado; sin devolverlos, la foto quedaba a 6 px
@@ -157,6 +179,17 @@ a[href*="whatsapp.com/download" i] {
   box-shadow: 0 6px 22px rgba(0,0,0,.18) !important;
   padding: 6px !important;
   animation: lumina-popover 180ms cubic-bezier(.32,1.3,.5,1);
+}
+/* El menú de un mensaje traía dentro una capa con el gris de WhatsApp que
+   tapaba el popover y dejaba solo nuestro borde como marco (captura del
+   usuario). Sin el DOM a mano: se vacían las variables de superficie dentro
+   del menú y el fondo de sus capas interiores. */
+[role="menu"] {
+  --WDS-surface-default: transparent !important;
+}
+[role="menu"] > div,
+[role="menu"] ul {
+  background-color: transparent !important;
 }
 [role="menu"] [role="menuitem"],
 [role="menu"] li[role="button"] {

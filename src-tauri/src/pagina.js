@@ -164,4 +164,77 @@
       }, 50);
     })();
   };
+
+  // ── Audio en reposo ──
+  //
+  // WhatsApp crea un `AudioContext` al cargar y lo deja en marcha aunque no
+  // suene nada. En WebKitGTK eso es una tubería de GStreamer renderizando
+  // silencio: medido en reposo, 13 % de CPU del proceso de la página, y el
+  // 86 % de eso en los hilos `webaudioSrc*` y el de PulseAudio. Los contextos
+  // nacen suspendidos, despiertan cuando algo va a sonar o se conecta un
+  // micrófono o un elemento multimedia, y vuelven a dormir al quedar sin uso.
+  //
+  // No se apaga WebAudio entero: las notas de voz pueden depender de él y
+  // no hay forma de probarlo sin grabar en un chat de verdad.
+  var AudioOriginal = window.AudioContext;
+  if (!AudioOriginal) return;
+  var contextos = [];
+  var sonando = 0;
+  var flujos = [];
+  var elementos = [];
+
+  function despertar(contexto) {
+    if (contexto.state === 'suspended') contexto.resume();
+  }
+  function enUso() {
+    return sonando > 0 ||
+      flujos.some(function (f) {
+        return f.getTracks().some(function (p) { return p.readyState === 'live'; });
+      }) ||
+      elementos.some(function (e) { return !e.paused; });
+  }
+
+  // Con `class` y no con una función: así `instanceof`, los métodos y los
+  // getters nativos siguen funcionando sobre el objeto devuelto.
+  window.AudioContext = class extends AudioOriginal {
+    constructor(opciones) {
+      super(opciones);
+      contextos.push(this);
+      this.suspend();
+    }
+  };
+
+  var empezar = AudioScheduledSourceNode.prototype.start;
+  AudioScheduledSourceNode.prototype.start = function () {
+    // Primero el original: si lanza (un segundo `start`), no hay `ended` que
+    // devuelva la cuenta.
+    var resultado = empezar.apply(this, arguments);
+    sonando++;
+    this.addEventListener('ended', function () { sonando--; }, { once: true });
+    despertar(this.context);
+    return resultado;
+  };
+  var desdeFlujo = AudioOriginal.prototype.createMediaStreamSource;
+  AudioOriginal.prototype.createMediaStreamSource = function (flujo) {
+    flujos.push(flujo);
+    despertar(this);
+    return desdeFlujo.apply(this, arguments);
+  };
+  var desdeElemento = AudioOriginal.prototype.createMediaElementSource;
+  AudioOriginal.prototype.createMediaElementSource = function (elemento) {
+    elementos.push(elemento);
+    despertar(this);
+    return desdeElemento.apply(this, arguments);
+  };
+
+  // Parar una pista con `stop()` no lanza ningún evento, así que el fin de
+  // una grabación solo se ve preguntando. Un temporizador cada 5 s no se nota
+  // al lado de los hilos de audio que duerme.
+  setInterval(function () {
+    contextos = contextos.filter(function (c) { return c.state !== 'closed'; });
+    flujos = flujos.filter(function (f) { return f.active; });
+    elementos = elementos.filter(function (e) { return e.isConnected || !e.paused; });
+    if (enUso()) return;
+    contextos.forEach(function (c) { if (c.state === 'running') c.suspend(); });
+  }, 5000);
 })();
