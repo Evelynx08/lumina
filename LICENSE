@@ -1,0 +1,32 @@
+Licencia de software propietario de BookOS
+Identificador SPDX: LicenseRef-BookOS
+
+Copyright (c) 2026 BookOS. Todos los derechos reservados.
+
+1. Este software, su código fuente, sus recursos gráficos y sonoros y su
+   documentación (en adelante, el "Software") son propiedad de BookOS.
+
+2. Se concede permiso para instalar y usar el Software tal como se distribuye
+   con BookOS o desde sus repositorios oficiales, en cualquier número de
+   equipos, para uso personal o profesional.
+
+3. Salvo autorización previa y por escrito de BookOS, no está permitido:
+   a) copiar, modificar, traducir o crear obras derivadas del Software;
+   b) redistribuir, vender, alquilar o sublicenciar el Software, en todo o
+      en parte, por separado o dentro de otro producto;
+   c) descompilar o desensamblar el Software, salvo en la medida en que la
+      ley aplicable lo permita expresamente pese a esta limitación.
+
+4. El Software puede incluir componentes de terceros que se distribuyen con su
+   propia licencia (MIT, Apache-2.0, LGPL, CC-BY, entre otras). Esta licencia no
+   limita los derechos que esas licencias conceden sobre dichos componentes;
+   sus avisos acompañan al Software.
+
+5. EL SOFTWARE SE PROPORCIONA "TAL CUAL", SIN GARANTÍA DE NINGÚN TIPO, EXPRESA
+   O IMPLÍCITA. EN NINGÚN CASO BOOKOS SERÁ RESPONSABLE DE DAÑOS DERIVADOS DEL
+   USO O DE LA IMPOSIBILIDAD DE USO DEL SOFTWARE, EN LA MEDIDA MÁXIMA QUE
+   PERMITA LA LEY.
+
+6. Esta licencia termina automáticamente si se incumplen sus condiciones.
+
+Para cualquier autorización: https://bookos.es/

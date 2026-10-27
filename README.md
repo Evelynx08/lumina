@@ -4,7 +4,7 @@
 
 **WhatsApp Web as a native BookOS app.**
 
-[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](#license)
+[![License](https://img.shields.io/badge/license-proprietary-lightgrey?style=flat-square)](#license)
 [![Rust](https://img.shields.io/badge/Rust-2021-000000?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24c8db?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app)
 [![WebKitGTK](https://img.shields.io/badge/WebKitGTK-4.1-blue?style=flat-square)](https://webkitgtk.org)
@@ -152,6 +152,6 @@ PKGBUILD             Arch package (secondary; BookOS ships the .rpm)
 
 ## License
 
-MIT, as declared in the `PKGBUILD`.
+Proprietary, all rights reserved (`LicenseRef-BookOS`). See [`LICENSE`](LICENSE).
 
 Lumina is an unofficial client and is not affiliated with WhatsApp or Meta.
